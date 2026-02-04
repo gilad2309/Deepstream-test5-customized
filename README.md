@@ -33,11 +33,56 @@ Ensure your Mosquitto service exposes:
 - MQTT TCP: `127.0.0.1:1883`
 - MQTT WebSocket: `127.0.0.1:9001`
 
+### Configure Mosquitto Service (systemd)
+If Mosquitto is not installed:
+```bash
+sudo apt-get update
+sudo apt-get install -y mosquitto mosquitto-clients
+```
+
+1) Check status:
+```bash
+systemctl status mosquitto
+```
+
+2) Ensure the main config includes `/etc/mosquitto/conf.d/` (default on Ubuntu):
+```bash
+cat /etc/mosquitto/mosquitto.conf
+```
+
+3) Create or edit the WebSocket listener file:
+```bash
+sudo nano /etc/mosquitto/conf.d/ws.conf
+```
+
+4) Add/ensure these listeners:
+```
+listener 1883 127.0.0.1
+protocol mqtt
+
+listener 9001 127.0.0.1
+protocol websockets
+
+allow_anonymous true
+```
+
+5) Enable + restart:
+```bash
+sudo systemctl enable mosquitto
+sudo systemctl restart mosquitto
+systemctl status mosquitto
+```
+
+6) Validate ports are open:
+```bash
+sudo ss -lntp | grep mosquitto
+```
+You should see listeners on `127.0.0.1:1883` and `127.0.0.1:9001`.
+
 ---
 
 ## Install
 ```bash
-npm install
 cd ui
 npm install
 npm run build
