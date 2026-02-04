@@ -102,7 +102,11 @@ function handleStart(req, res) {
     'deepstream',
     path.join(BACKEND_DIR, 'deepstream', 'deepstream-test5-app'),
     ['-c', CONFIG_NATIVE],
-    { cwd: path.join(BACKEND_DIR, 'deepstream'), env: getDeepstreamEnv() }
+    {
+      // Run from config directory so all relative paths resolve correctly.
+      cwd: path.join(BACKEND_DIR, 'deepstream', 'configs', 'DeepStream-Yolo'),
+      env: getDeepstreamEnv()
+    }
   );
   results.led_notifier = startProcess(
     'led_notifier',
