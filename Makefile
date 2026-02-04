@@ -15,7 +15,7 @@ ifeq ($(CUDA_VER),)
   $(error "CUDA_VER is not set")
 endif
 
-APP:= backend/deepstream/deepstream-test5-app
+APP:= app/deepstream/deepstream-test5-app
 
 TARGET_DEVICE = $(shell gcc -dumpmachine | cut -f1 -d -)
 
@@ -28,13 +28,13 @@ ifeq ($(TARGET_DEVICE),aarch64)
   CFLAGS:= -DPLATFORM_TEGRA
 endif
 
-SRCS:= deepstream_test5_app_main.c deepstream_utc.c
+SRCS:= app/deepstream/src/deepstream_test5_app_main.c app/deepstream/src/deepstream_utc.c
 SRCS+= ../deepstream-app/deepstream_app.c ../deepstream-app/deepstream_app_config_parser.c
 SRCS+= ../deepstream-app/deepstream_app_config_parser_yaml.cpp
 SRCS+= $(wildcard ../../apps-common/src/*.c)
 SRCS+= $(wildcard ../../apps-common/src/deepstream-yaml/*.cpp)
 
-INCS:= $(wildcard *.h)
+INCS:= $(wildcard app/deepstream/src/*.h)
 
 PKGS:= gstreamer-1.0 gstreamer-video-1.0 x11 json-glib-1.0
 

@@ -1,0 +1,17 @@
+import { StatusResponse } from '../types';
+
+export async function startSurveillance(): Promise<StatusResponse> {
+  const res = await fetch('/api/start', { method: 'POST' });
+  if (!res.ok) {
+    throw new Error(`Start failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchStatus(): Promise<StatusResponse> {
+  const res = await fetch('/api/status');
+  if (!res.ok) {
+    throw new Error(`Status failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}

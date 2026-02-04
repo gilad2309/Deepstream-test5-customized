@@ -1,16 +1,10 @@
 {
   "name": "ds-webrtc-signaling",
   "version": "1.0.0",
-  "description": "Simple signaling server for DeepStream WebRTC",
+  "description": "Minimal native DeepStream launcher with local MQTT UI",
   "main": "signaling_server.js",
   "scripts": {
-    "data-manager": "python3 backend/mqtt/data_manager.py",
-    "relay-emulator": "python3 backend/mqtt/relay_emulator.py",
-    "serve": "node backend/server.js"
+    "serve": "node app/server.js"
   },
-  "dependencies": {
-    "ws": "^8.0.0",
-    "mqtt": "^4.3.7",
-    "aedes": "^0.51.2"
-  }
+  "dependencies": {}
 }

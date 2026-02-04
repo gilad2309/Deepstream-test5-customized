@@ -1,7 +1,9 @@
-backend/data/logs/
+app/data/logs/
 logs/
 node_modules/
-web-ui/dist/
+ui/node_modules/
+ui/dist/
 __pycache__/
 *.o
 *.pyc
+app/deepstream/deepstream-test5-app
