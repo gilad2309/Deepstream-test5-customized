@@ -107,6 +107,7 @@ npm run serve -- --no-ddb
 ```
 - UI: http://127.0.0.1:8081
 - Click **Start Surveillance** to open the native DeepStream window.
+ - Cameras are detected from `app/config/cameras.txt` (only reachable RTSP hosts are used).
 
 Logs:
 - `app/data/logs/deepstream.out.log`
@@ -130,6 +131,12 @@ Logs:
 ### Web UI
 - `VITE_MQTT_WS_URL` (default `ws://127.0.0.1:9001`)
 - `VITE_PERSON_COUNT_TOPIC` (default `deepstream/person_count`)
+
+### Camera List (Auto-Detect)
+Edit `app/config/cameras.txt` (one RTSP URL per line). The server probes which cameras are reachable and generates a DeepStream config automatically. To override the file path, set:
+```
+CAMERAS_FILE=/path/to/cameras.txt
+```
 
 ---
 

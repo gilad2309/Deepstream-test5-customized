@@ -7,11 +7,18 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const { spawn, spawnSync } = require('child_process');
+const {
+  buildDeepstreamConfig,
+  readCameraList,
+  resolveCameras
+} = require('./deepstream/config_generator');
 
 const BACKEND_DIR = __dirname;
 const BASE_DIR = path.join(__dirname, '..');
 const UI_ROOT = path.join(BASE_DIR, 'ui', 'dist');
 const LOG_DIR = path.join(BACKEND_DIR, 'data', 'logs');
+const RUNTIME_DIR = path.join(BACKEND_DIR, 'data', 'runtime');
+const DS_YOLO_DIR = path.join(BACKEND_DIR, 'deepstream', 'configs', 'DeepStream-Yolo');
 const PORT = 8081;
 const CONFIG_NATIVE = path.join(
   BACKEND_DIR,
@@ -33,8 +40,9 @@ const mime = {
   '.ico': 'image/x-icon'
 };
 
-function ensureLogDir() {
+function ensureDirs() {
   if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+  if (!fs.existsSync(RUNTIME_DIR)) fs.mkdirSync(RUNTIME_DIR, { recursive: true });
 }
 
 function isRunning(name) {
@@ -52,7 +60,7 @@ function killByPattern(pattern) {
 
 function startProcess(name, cmd, args, opts = {}) {
   if (isRunning(name)) return { status: 'already_running', pid: processes[name].pid };
-  ensureLogDir();
+  ensureDirs();
   const stdout = fs.openSync(path.join(LOG_DIR, `${name}.out.log`), 'a');
   const stderr = fs.openSync(path.join(LOG_DIR, `${name}.err.log`), 'a');
   const child = spawn(cmd, args, {
@@ -92,16 +100,29 @@ function getLedEnv() {
   };
 }
 
-function handleStart(req, res) {
+async function handleStart(req, res) {
   const results = {};
   // Ensure stale DeepStream instances are not holding the RTSP source.
   killByPattern('deepstream-test5-app');
   // Ensure stale LED notifier isn't holding GPIO.
   killByPattern('person_led_mqtt.py');
+  ensureDirs();
+
+  const camerasFile = process.env.CAMERAS_FILE || path.join(BASE_DIR, 'app', 'config', 'cameras.txt');
+  const configured = readCameraList(camerasFile);
+  const activeUrls = await resolveCameras(configured);
+  const configBody = buildDeepstreamConfig({
+    urls: activeUrls,
+    inferConfig: path.join(DS_YOLO_DIR, 'config_infer_primary_yoloV8.txt'),
+    trackerConfig: path.join(DS_YOLO_DIR, 'config_tracker_NvDCF_perf.yml'),
+    trackerLib: path.join(BACKEND_DIR, 'deepstream', 'lib', 'libnvds_nvmultiobjecttracker.so')
+  });
+  const generatedConfig = path.join(RUNTIME_DIR, 'deepstream_auto.txt');
+  fs.writeFileSync(generatedConfig, configBody);
   results.deepstream = startProcess(
     'deepstream',
     path.join(BACKEND_DIR, 'deepstream', 'deepstream-test5-app'),
-    ['-c', CONFIG_NATIVE],
+    ['-c', generatedConfig],
     {
       // Run from config directory so all relative paths resolve correctly.
       cwd: path.join(BACKEND_DIR, 'deepstream', 'configs', 'DeepStream-Yolo'),
@@ -115,7 +136,14 @@ function handleStart(req, res) {
     { env: getLedEnv() }
   );
   res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ ok: true, running: isRunning('deepstream'), results }));
+  res.end(
+    JSON.stringify({
+      ok: true,
+      running: isRunning('deepstream'),
+      cameras: { configured: configured.length, active: activeUrls.length },
+      results
+    })
+  );
 }
 
 function handleStatus(req, res) {
