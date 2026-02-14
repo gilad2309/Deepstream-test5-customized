@@ -3,6 +3,7 @@ import mqtt from 'mqtt/dist/mqtt';
 import type { MqttClient } from 'mqtt';
 import { fetchStatus, startSurveillance } from './lib/api';
 import { getMqttUrl, getPersonCountTopic } from './lib/config';
+import { parseCount, MedianWindow } from './lib/parseCount';
 import { ConnectionState } from './types';
 
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
   const [mqttError, setMqttError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const clientRef = useRef<MqttClient | null>(null);
+  const medianRef = useRef(new MedianWindow(5000));
 
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +32,10 @@ export default function App() {
         if (cancelled) return;
         isRunning = Boolean(status.running);
         setRunning(isRunning);
-        if (!isRunning) setCount(null);
+        if (!isRunning) {
+          setCount(null);
+          medianRef.current.clear();
+        }
         setActionError(null);
       } catch (err: any) {
         if (!cancelled) setActionError(err?.message || 'Failed to fetch status');
@@ -77,9 +82,9 @@ export default function App() {
 
     client.on('message', (msgTopic, payload) => {
       if (disposed || msgTopic !== topic) return;
-      const next = parseCount(payload.toString());
-      if (typeof next === 'number') {
-        setCount(next);
+      const raw = parseCount(payload.toString());
+      if (typeof raw === 'number') {
+        setCount(medianRef.current.push(raw));
         setRunning(true);
       }
     });
@@ -139,31 +144,4 @@ export default function App() {
       </div>
     </div>
   );
-}
-
-function parseCount(payload: string): number | null {
-  const text = payload.trim();
-  if (!text) return null;
-  try {
-    const data = JSON.parse(text);
-    if (typeof data === 'number') return Math.round(data);
-    if (typeof data === 'string') {
-      const num = Number(data);
-      return Number.isFinite(num) ? Math.round(num) : null;
-    }
-    if (data && typeof data === 'object') {
-      for (const key of ['count', 'person_count', 'value']) {
-        const value = data[key];
-        if (typeof value === 'number') return Math.round(value);
-        if (typeof value === 'string') {
-          const num = Number(value);
-          if (Number.isFinite(num)) return Math.round(num);
-        }
-      }
-    }
-  } catch {
-    const num = Number(text);
-    return Number.isFinite(num) ? Math.round(num) : null;
-  }
-  return null;
 }

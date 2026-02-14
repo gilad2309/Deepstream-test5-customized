@@ -170,6 +170,56 @@ static struct mosquitto *person_mqtt = NULL;
 static gchar *person_mqtt_topic = NULL;
 static gboolean person_mqtt_started = FALSE;
 
+/* Sliding-window count smoothing.
+ * Keeps the last SMOOTH_WINDOW_SIZE raw counts per stream and publishes the
+ * median, which filters single-frame detection drops/spikes. */
+#define MAX_SMOOTH_WINDOW 31
+#define DEFAULT_SMOOTH_WINDOW 5
+static int smooth_window_size = 0; /* 0 = not yet initialised */
+static guint smooth_buf[MAX_SOURCE_BINS][MAX_SMOOTH_WINDOW];
+static int   smooth_pos[MAX_SOURCE_BINS];
+static int   smooth_len[MAX_SOURCE_BINS];
+
+static int
+uint_cmp (const void *a, const void *b)
+{
+  guint va = *(const guint *) a;
+  guint vb = *(const guint *) b;
+  return (va > vb) - (va < vb);
+}
+
+static guint
+smooth_count (guint stream_id, guint raw_count)
+{
+  if (smooth_window_size == 0) {
+    const gchar *env = g_getenv ("SMOOTH_WINDOW");
+    smooth_window_size = DEFAULT_SMOOTH_WINDOW;
+    if (env && *env) {
+      int v = atoi (env);
+      if (v >= 1 && v <= MAX_SMOOTH_WINDOW)
+        smooth_window_size = v;
+    }
+    /* force odd for a clean median */
+    if (smooth_window_size % 2 == 0)
+      smooth_window_size++;
+    memset (smooth_buf, 0, sizeof (smooth_buf));
+    memset (smooth_pos, 0, sizeof (smooth_pos));
+    memset (smooth_len, 0, sizeof (smooth_len));
+  }
+
+  guint sid = stream_id < MAX_SOURCE_BINS ? stream_id : 0;
+  smooth_buf[sid][smooth_pos[sid]] = raw_count;
+  smooth_pos[sid] = (smooth_pos[sid] + 1) % smooth_window_size;
+  if (smooth_len[sid] < smooth_window_size)
+    smooth_len[sid]++;
+
+  /* compute median */
+  guint tmp[MAX_SMOOTH_WINDOW];
+  memcpy (tmp, smooth_buf[sid], smooth_len[sid] * sizeof (guint));
+  qsort (tmp, smooth_len[sid], sizeof (guint), uint_cmp);
+  return tmp[smooth_len[sid] / 2];
+}
+
 static void
 init_person_count_mqtt (void)
 {
@@ -774,7 +824,7 @@ bbox_generated_probe_after_analytics (AppCtx * appCtx, GstBuffer * buf,
       l = l_next;
     }
     testAppCtx->streams[stream_id].frameCount++;
-    publish_person_count (person_count, stream_id);
+    publish_person_count (smooth_count (stream_id, person_count), stream_id);
   }
 }
 

@@ -5,7 +5,7 @@ This project is simplified to the essentials:
 - **One web page** with a single **Start Surveillance** button
 - **Native DeepStream window** for live inference
 - **Real-time person count** on the web UI
-- **LED blinking** when person count > 1
+- **LED blinking** when person count >= 1
 - **Local MQTT broker** (Mosquitto system service)
 - **Telegram integration** retained
 
@@ -13,10 +13,10 @@ This project is simplified to the essentials:
 
 ## High-Level Flow
 1. User clicks **Start Surveillance** in the web UI.
-2. Node server starts **DeepStream** with the native config.
+2. Node server probes the camera list, generates a DeepStream config, and starts **DeepStream**.
 3. DeepStream publishes person counts to MQTT topic `deepstream/person_count`.
 4. The UI subscribes via MQTT WebSocket and displays the count.
-5. The LED notifier subscribes via MQTT and blinks when count > 1.
+5. The LED notifier subscribes via MQTT and blinks when count >= 1.
 
 ---
 
@@ -103,11 +103,12 @@ This produces:
 
 ## Run
 ```bash
-npm run serve -- --no-ddb
+npm run serve
 ```
 - UI: http://127.0.0.1:8081
 - Click **Start Surveillance** to open the native DeepStream window.
- - Cameras are detected from `app/config/cameras.txt` (only reachable RTSP hosts are used).
+- Cameras are detected from `app/config/cameras.txt` (only reachable RTSP hosts are used).
+- Generated config: `app/data/runtime/deepstream_auto.txt`.
 
 Logs:
 - `app/data/logs/deepstream.out.log`
@@ -144,9 +145,10 @@ CAMERAS_FILE=/path/to/cameras.txt
 Telegram integration remains unchanged.
 - `app/mqtt/command_listener.py` still starts the server / pipeline.
 - See `telegram_bot/README.md` for setup.
+- If you use `command_listener.py`, set `RUN_COMMAND="npm run serve"` to avoid the legacy `--no-ddb` flag.
 
 ---
 
 ## Notes
 - Person count topic: `deepstream/person_count`
-- LED blinks when **count > 1**.
+- LED blinks when **count >= 1**.

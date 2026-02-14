@@ -20,11 +20,6 @@ const LOG_DIR = path.join(BACKEND_DIR, 'data', 'logs');
 const RUNTIME_DIR = path.join(BACKEND_DIR, 'data', 'runtime');
 const DS_YOLO_DIR = path.join(BACKEND_DIR, 'deepstream', 'configs', 'DeepStream-Yolo');
 const PORT = 8081;
-const CONFIG_NATIVE = path.join(
-  BACKEND_DIR,
-  'deepstream',
-  'configs/DeepStream-Yolo/deepstream_app_config_native.txt'
-);
 
 const processes = {};
 
@@ -58,22 +53,34 @@ function killByPattern(pattern) {
   }
 }
 
+function timestampLines(data, stream) {
+  const lines = data.toString().split('\n');
+  for (const line of lines) {
+    if (line) stream.write(`[${new Date().toISOString()}] ${line}\n`);
+  }
+}
+
 function startProcess(name, cmd, args, opts = {}) {
   if (isRunning(name)) return { status: 'already_running', pid: processes[name].pid };
   ensureDirs();
-  const stdout = fs.openSync(path.join(LOG_DIR, `${name}.out.log`), 'a');
-  const stderr = fs.openSync(path.join(LOG_DIR, `${name}.err.log`), 'a');
+  const outPath = path.join(LOG_DIR, `${name}.out.log`);
+  const errPath = path.join(LOG_DIR, `${name}.err.log`);
+  const outStream = fs.createWriteStream(outPath, { flags: 'w' });
+  const errStream = fs.createWriteStream(errPath, { flags: 'w' });
   const child = spawn(cmd, args, {
     cwd: opts.cwd || BACKEND_DIR,
     env: { ...process.env, ...opts.env },
     detached: false,
-    stdio: ['ignore', stdout, stderr]
+    stdio: ['ignore', 'pipe', 'pipe']
   });
+  child.stdout.on('data', (data) => timestampLines(data, outStream));
+  child.stderr.on('data', (data) => timestampLines(data, errStream));
   processes[name] = child;
   child.on('exit', (code, signal) => {
     delete processes[name];
-    const msg = `[${name}] exited code=${code} signal=${signal}\n`;
-    fs.appendFileSync(path.join(LOG_DIR, `${name}.err.log`), msg);
+    errStream.write(`[${new Date().toISOString()}] [${name}] exited code=${code} signal=${signal}\n`);
+    outStream.end();
+    errStream.end();
   });
   return { status: 'started', pid: child.pid };
 }
@@ -104,19 +111,25 @@ async function handleStart(req, res) {
   const results = {};
   // Ensure stale DeepStream instances are not holding the RTSP source.
   killByPattern('deepstream-test5-app');
-  // Ensure stale LED notifier isn't holding GPIO.
   killByPattern('person_led_mqtt.py');
+  // Let old processes release RTSP sessions and GPIO before respawning.
+  await new Promise((r) => setTimeout(r, 500));
   ensureDirs();
 
   const camerasFile = process.env.CAMERAS_FILE || path.join(BASE_DIR, 'app', 'config', 'cameras.txt');
   const configured = readCameraList(camerasFile);
   const activeUrls = await resolveCameras(configured);
-  const configBody = buildDeepstreamConfig({
+  const useTracker = process.env.USE_TRACKER === '1';
+  const configOpts = {
     urls: activeUrls,
     inferConfig: path.join(DS_YOLO_DIR, 'config_infer_primary_yoloV8.txt'),
-    trackerConfig: path.join(DS_YOLO_DIR, 'config_tracker_NvDCF_perf.yml'),
-    trackerLib: path.join(BACKEND_DIR, 'deepstream', 'lib', 'libnvds_nvmultiobjecttracker.so')
-  });
+    useTracker
+  };
+  if (useTracker) {
+    configOpts.trackerConfig = path.join(DS_YOLO_DIR, 'config_tracker_NvDCF_perf.yml');
+    configOpts.trackerLib = path.join(BACKEND_DIR, 'deepstream', 'lib', 'libnvds_nvmultiobjecttracker.so');
+  }
+  const configBody = buildDeepstreamConfig(configOpts);
   const generatedConfig = path.join(RUNTIME_DIR, 'deepstream_auto.txt');
   fs.writeFileSync(generatedConfig, configBody);
   results.deepstream = startProcess(
@@ -175,20 +188,37 @@ function serveStatic(req, res) {
   res.end('Not found');
 }
 
-const server = http.createServer((req, res) => {
-  const key = `${req.method} ${req.url.split('?')[0]}`;
-  if (key === 'POST /api/start') return handleStart(req, res);
-  if (key === 'GET /api/status') return handleStatus(req, res);
-  serveStatic(req, res);
-});
+function createServer() {
+  return http.createServer((req, res) => {
+    const key = `${req.method} ${req.url.split('?')[0]}`;
+    if (key === 'POST /api/start') return handleStart(req, res);
+    if (key === 'GET /api/status') return handleStatus(req, res);
+    serveStatic(req, res);
+  });
+}
 
-server.listen(PORT, () => {
-  console.log(`Local server running on http://127.0.0.1:${PORT}`);
-  console.log(`Serving static files from ${UI_ROOT}`);
-  console.log('Endpoints: POST /api/start, GET /api/status');
-});
+if (require.main === module) {
+  const server = createServer();
+  server.listen(PORT, () => {
+    console.log(`Local server running on http://127.0.0.1:${PORT}`);
+    console.log(`Serving static files from ${UI_ROOT}`);
+    console.log('Endpoints: POST /api/start, GET /api/status');
+  });
 
-process.on('SIGINT', () => {
-  Object.values(processes).forEach((child) => child.kill('SIGTERM'));
-  process.exit(0);
-});
+  process.on('SIGINT', () => {
+    Object.values(processes).forEach((child) => child.kill('SIGTERM'));
+    process.exit(0);
+  });
+}
+
+module.exports = {
+  createServer,
+  getDeepstreamEnv,
+  getLedEnv,
+  isRunning,
+  timestampLines,
+  serveStatic,
+  handleStart,
+  handleStatus,
+  processes,
+};

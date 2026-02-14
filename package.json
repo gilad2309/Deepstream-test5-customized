@@ -4,7 +4,16 @@
   "description": "Minimal native DeepStream launcher with local MQTT UI",
   "main": "signaling_server.js",
   "scripts": {
-    "serve": "node app/server.js"
+    "serve": "node app/server.js",
+    "test": "node node_modules/.bin/vitest run --config tests/js/vitest.config.js",
+    "test:ui": "node ui/node_modules/.bin/vitest run --config tests/ui/vitest.config.ts",
+    "test:py": "python3 -m pytest tests/python/ -v",
+    "test:all": "npm test && npm run test:ui && npm run test:py"
   },
-  "dependencies": {}
+  "dependencies": {
+    "playwright": "^1.58.2"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
 }

@@ -52,10 +52,11 @@ function buildDeepstreamConfig({
   inferConfig,
   trackerConfig,
   trackerLib,
-  tiledWidth = 1920,
-  tiledHeight = 1080,
-  streammuxWidth = 1920,
-  streammuxHeight = 1080
+  useTracker = false,
+  tiledWidth = 2560,
+  tiledHeight = 1440,
+  streammuxWidth = 2560,
+  streammuxHeight = 1440
 }) {
   const count = Math.max(1, urls.length);
   const { rows, columns } = computeGrid(count);
@@ -66,7 +67,7 @@ function buildDeepstreamConfig({
         'enable=1',
         'type=4',
         `uri=${url}`,
-        index === 0 ? `num-sources=${count}` : null,
+        'rtsp-reconnect-interval-sec=5',
         'gpu-id=0',
         'cudadec-memtype=0',
         '',
@@ -133,6 +134,7 @@ function buildDeepstreamConfig({
     'nvbuf-memory-type=0',
     `config-file=${inferConfig}`,
     '',
+    ...(useTracker ? [
     '[tracker]',
     'enable=1',
     'tracker-width=640',
@@ -141,6 +143,7 @@ function buildDeepstreamConfig({
     `ll-config-file=${trackerConfig}`,
     'gpu-id=0',
     '',
+    ] : []),
     '[tests]',
     'file-loop=0',
     ''

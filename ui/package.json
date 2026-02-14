@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "echo \"no lint configured\""
+    "lint": "echo \"no lint configured\"",
+    "test": "vitest run --config ../tests/ui/vitest.config.ts --root ..",
+    "test:watch": "vitest --config ../tests/ui/vitest.config.ts --root .."
   },
   "dependencies": {
     "mqtt": "^4.3.7",
@@ -15,7 +17,9 @@
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.9.0",
+    "jsdom": "^28.0.0",
     "typescript": "^5.4.5",
-    "vite": "^6.0.1"
+    "vite": "^6.0.1",
+    "vitest": "^4.0.18"
   }
 }

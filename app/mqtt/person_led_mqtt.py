@@ -10,11 +10,6 @@ import threading
 import time
 from typing import Optional
 
-# Match your working script hint
-os.environ.setdefault("JETSON_MODEL_NAME", "JETSON_ORIN_NANO")
-import Jetson.GPIO as GPIO
-import paho.mqtt.client as mqtt
-
 # Config
 BROKER_HOST = os.getenv("MQTT_HOST", "127.0.0.1")
 BROKER_PORT = int(os.getenv("MQTT_PORT", "1883"))
@@ -23,14 +18,25 @@ HOLD_SECONDS = float(os.getenv("LED_HOLD_SECONDS", "5"))
 LED_PIN = int(os.getenv("LED_PIN", "7"))  # BOARD pin number
 BLINK_MIN_COUNT = 1  # Blink when count > 1
 
-GPIO.setwarnings(False)
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(LED_PIN, GPIO.OUT, initial=GPIO.LOW)
+# GPIO and MQTT are imported lazily to allow testing pure functions
+# on machines without Jetson hardware.
+GPIO = None
 
 timer_lock = threading.Lock()
 blink_thread: threading.Thread | None = None
 stop_blink = threading.Event()
 last_high_ts: float = 0.0
+
+
+def init_gpio():
+    """Initialize Jetson GPIO. Must be called before set_led/blink functions."""
+    global GPIO
+    os.environ.setdefault("JETSON_MODEL_NAME", "JETSON_ORIN_NANO")
+    import Jetson.GPIO as _GPIO
+    GPIO = _GPIO
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BOARD)
+    GPIO.setup(LED_PIN, GPIO.OUT, initial=GPIO.LOW)
 
 
 def set_led(state: bool):
@@ -133,6 +139,10 @@ def on_connect(client, userdata, flags, rc, properties=None):
 
 
 def main():
+    import paho.mqtt.client as mqtt
+
+    init_gpio()
+
     # Self-test blink
     print(f"[INIT] Self-test blink on LED pin {LED_PIN}")
     blink_for_duration(1.0, period=0.25)

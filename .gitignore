@@ -7,3 +7,6 @@ __pycache__/
 *.o
 *.pyc
 app/deepstream/deepstream-test5-app
+app/data/runtime/
+*.onnx
+*.engine
